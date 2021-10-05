@@ -6,6 +6,8 @@ const int VOLKSWAGEN_MAX_RATE_UP = 4;               // 2.0 Nm/s RoC limit (EPS r
 const int VOLKSWAGEN_MAX_RATE_DOWN = 10;            // 5.0 Nm/s RoC limit (EPS rack has own soft-limit of 5.0 Nm/s)
 const int VOLKSWAGEN_DRIVER_TORQUE_ALLOWANCE = 80;
 const int VOLKSWAGEN_DRIVER_TORQUE_FACTOR = 3;
+const int VOLKSWAGEN_MAX_ACCEL = 2000;              // Max accel 2.0 m/s2
+const int VOLKSWAGEN_MIN_ACCEL = -3500;             // Max decel 3.5 m/s2
 
 // Safety-relevant CAN messages for the Volkswagen MQB platform
 #define MSG_ESP_19      0x0B2   // RX from ABS, for wheel speeds
@@ -34,6 +36,7 @@ addr_checks volkswagen_mqb_rx_checks = {volkswagen_mqb_addr_checks, VOLKSWAGEN_M
 // Safety-relevant CAN messages for the Volkswagen PQ35/PQ46/NMS platforms
 #define MSG_LENKHILFE_3 0x0D0   // RX from EPS, for steering angle and driver steering torque
 #define MSG_HCA_1       0x0D2   // TX by OP, Heading Control Assist steering torque
+#define MSG_ACC_SYSTEM  0x368   // TX by OP, ACC System Control (Longitudinal)
 #define MSG_MOTOR_2     0x288   // RX from ECU, for CC state and brake switch state
 #define MSG_MOTOR_3     0x380   // RX from ECU, for driver throttle input
 #define MSG_GRA_NEU     0x38A   // TX by OP, ACC control buttons for cancel/resume
@@ -41,7 +44,7 @@ addr_checks volkswagen_mqb_rx_checks = {volkswagen_mqb_addr_checks, VOLKSWAGEN_M
 #define MSG_LDW_1       0x5BE   // TX by OP, Lane line recognition and text alerts
 
 // Transmit of GRA_Neu is allowed on bus 0 and 2 to keep compatibility with gateway and camera integration
-const CanMsg VOLKSWAGEN_PQ_TX_MSGS[] = {{MSG_HCA_1, 0, 5}, {MSG_GRA_NEU, 0, 4}, {MSG_GRA_NEU, 2, 4}, {MSG_LDW_1, 0, 8}};
+const CanMsg VOLKSWAGEN_PQ_TX_MSGS[] = {{MSG_HCA_1, 0, 5}, {MSG_GRA_NEU, 0, 4}, {MSG_GRA_NEU, 2, 4}, {MSG_LDW_1, 0, 8}, {MSG_ACC_SYSTEM, 0, 8}};
 #define VOLKSWAGEN_PQ_TX_MSGS_LEN (sizeof(VOLKSWAGEN_PQ_TX_MSGS) / sizeof(VOLKSWAGEN_PQ_TX_MSGS[0]))
 
 AddrCheckStruct volkswagen_pq_addr_checks[] = {
@@ -353,6 +356,29 @@ static int volkswagen_pq_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
     }
 
     if (volkswagen_steering_check(desired_torque)) {
+      tx = 0;
+    }
+  }
+
+  // Safety check for MSG_ACC_SYSTEM acceleration and braking
+  // Signal: MSG_ACC_SYSTEM.ACS_Sollbeschl (acceleration in m/s2, scale 0.005, offset -7.22)
+  // To avoid floating point math, scale upward and compare to pre-scaled safety m/s2 boundaries * 100
+  if (addr == MSG_ACC_SYSTEM) {
+    bool violation = 0;
+    int desired_accel = ((((GET_BYTE(to_send, 4) & 0x7) << 8) | GET_BYTE(to_send, 3)) * 5) - 7220;
+
+    int acc_status = (GET_BYTE(to_send, 1) & 0x30) >> 4;
+    if ((desired_accel == 3010) && !(acc_status == 3)) {
+      // VW send 3.01 m/s2 acceleration in place of zero while disengaged, treat it as such
+      desired_accel = 0;
+    }
+
+    if (!controls_allowed && (desired_accel != 0)) {
+      violation = 1;
+    }
+    violation |= max_limit_check(desired_accel, VOLKSWAGEN_MAX_ACCEL, VOLKSWAGEN_MIN_ACCEL);
+
+    if (violation) {
       tx = 0;
     }
   }
