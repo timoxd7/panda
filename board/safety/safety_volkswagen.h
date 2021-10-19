@@ -233,6 +233,7 @@ static int volkswagen_pq_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
 
     // Enter controls on rising edge of stock ACC, exit controls if stock ACC disengages
     // Signal: Motor_2.GRA_Status
+    /*
     if (addr == MSG_MOTOR_2) {
       int acc_status = (GET_BYTE(to_push, 2) & 0xC0) >> 6;
       int cruise_engaged = ((acc_status == 1) || (acc_status == 2)) ? 1 : 0;
@@ -244,6 +245,7 @@ static int volkswagen_pq_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
       }
       cruise_engaged_prev = cruise_engaged;
     }
+    */
 
     // Signal: Motor_3.Fahrpedal_Rohsignal
     if (addr == MSG_MOTOR_3) {
