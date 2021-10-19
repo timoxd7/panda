@@ -136,7 +136,7 @@ static const addr_checks* volkswagen_mqb_init(int16_t param) {
 static const addr_checks* volkswagen_pq_init(int16_t param) {
   UNUSED(param);
 
-  controls_allowed = false;
+  controls_allowed = true;
   relay_malfunction_reset();
   volkswagen_torque_msg = MSG_HCA_1;
   volkswagen_lane_msg = MSG_LDW_1;
@@ -176,17 +176,17 @@ static int volkswagen_mqb_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
 
     // Enter controls on rising edge of stock ACC, exit controls if stock ACC disengages
     // Signal: TSK_06.TSK_Status
-    if (addr == MSG_TSK_06) {
-      int acc_status = (GET_BYTE(to_push, 3) & 0x7);
-      int cruise_engaged = ((acc_status == 3) || (acc_status == 4) || (acc_status == 5)) ? 1 : 0;
-      if (cruise_engaged && !cruise_engaged_prev) {
-        controls_allowed = 1;
-      }
-      if (!cruise_engaged) {
-        controls_allowed = 0;
-      }
-      cruise_engaged_prev = cruise_engaged;
-    }
+    // if (addr == MSG_TSK_06) {
+    //   int acc_status = (GET_BYTE(to_push, 3) & 0x7);
+    //   int cruise_engaged = ((acc_status == 3) || (acc_status == 4) || (acc_status == 5)) ? 1 : 0;
+    //   if (cruise_engaged && !cruise_engaged_prev) {
+    //     controls_allowed = 1;
+    //   }
+    //   if (!cruise_engaged) {
+    //     controls_allowed = 0;
+    //   }
+    //   cruise_engaged_prev = cruise_engaged;
+    // }
 
     // Signal: Motor_20.MO_Fahrpedalrohwert_01
     if (addr == MSG_MOTOR_20) {
